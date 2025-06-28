@@ -1,8 +1,8 @@
-
-
 #include <stdio.h>
+#include <unistd.h>
 #include "touch.h"
 #include "bmp.h"
+#include "touch.h"
 
 int main()
 {
@@ -69,5 +69,4 @@ int main()
 
 	touch_close(ts);
 	return 0;
-}
 }
