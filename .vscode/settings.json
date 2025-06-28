@@ -4,6 +4,7 @@
     "pages.json": "jsonc",
     "*.md": "markdown",
     "*.css": "tailwindcss",
-    "touch.h": "c"
+    "touch.h": "c",
+    "ui_pages.h": "c"
   }
 }
