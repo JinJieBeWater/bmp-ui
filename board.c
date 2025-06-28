@@ -1,11 +1,18 @@
 
-#include <stdio.h>
 
+#include <stdio.h>
 #include "touch.h"
+#include "bmp.h"
 
 int main()
 {
-	struct input_event myinput;
+	// 显示登录图片
+	if (bmp_show("./resources/login.bmp", 0, 0, 800, 480, "/dev/fb0") != 0)
+	{
+		printf("显示登录图片失败!\n");
+		return -1;
+	}
+
 	touch_device_t *ts = touch_open("/dev/input/event0");
 	if (!ts)
 	{
@@ -14,37 +21,15 @@ int main()
 	}
 
 	int x = -1, y = -1;
+	printf("请触摸屏幕...\n");
 	while (1)
 	{
-		int ret = touch_read_event(ts, &myinput);
-		if (ret == 0)
+		if (touch_get_xy(ts, &x, &y) == 0)
 		{
-			if (myinput.type == EV_ABS)
-			{
-				if (myinput.code == ABS_X)
-				{
-					x = myinput.value;
-					printf("x坐标是: %d\n", x);
-				}
-				if (myinput.code == ABS_Y)
-				{
-					y = myinput.value;
-					printf("y坐标是: %d\n", y);
-				}
-			}
-			if (x != -1 && y != -1) // 已经读取到x和y
-				break;
+			printf("检测到触摸: x=%d, y=%d\n", x, y);
+			// 这里可以根据需要处理坐标
 		}
-		else if (ret == 1)
-		{
-			// 非阻塞，无事件，稍作等待
-			usleep(1000); // 1ms
-		}
-		else
-		{
-			printf("读取触摸屏事件失败!\n");
-			break;
-		}
+		usleep(1000); // 1ms
 	}
 
 	touch_close(ts);
