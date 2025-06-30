@@ -54,6 +54,15 @@ void event_loop(touch_device_t *ts)
 
 int main()
 {
+	// 开机动画
+	char bmp_path[128];
+	for (int i = 0; i <= 26; ++i)
+	{
+		snprintf(bmp_path, sizeof(bmp_path), "resources/boot/%d.bmp", i);
+		bmp_show(bmp_path, 0, 0, LCD_WIDTH, LCD_HEIGHT, LCD_FB_PATH);
+		usleep(40000); // 40ms per frame, 可根据需要调整
+	}
+
 	ui_pages_init();
 	touch_device_t *ts = open_touch();
 	if (!ts)
