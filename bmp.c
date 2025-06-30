@@ -120,36 +120,65 @@ int bmp_show(const char *bmp_path, int lcd_x, int lcd_y, int lcd_width, int lcd_
 int bmp_read_region_to_buf(const char *bmp_path, int src_x, int src_y, int w, int h,
                            int *dst, int dst_stride, int dst_x, int dst_y)
 {
+  printf("[bmp_read_region_to_buf] 打开BMP: %s\n", bmp_path);
   int bmpfd = open(bmp_path, O_RDWR);
   if (bmpfd == -1)
+  {
+    printf("[bmp_read_region_to_buf] 打开失败\n");
     return -1;
+  }
   unsigned char header[54];
-  read(bmpfd, header, 54);
+  if (read(bmpfd, header, 54) != 54)
+  {
+    printf("[bmp_read_region_to_buf] 读取头失败\n");
+    close(bmpfd);
+    return -3;
+  }
   int width = *(int *)&header[18];
   int height = *(int *)&header[22];
   unsigned short bpp = *(unsigned short *)&header[28];
   unsigned int offset = *(unsigned int *)&header[10];
+  printf("[bmp_read_region_to_buf] bmp宽=%d,高=%d,bpp=%d,offset=%u\n", width, height, bpp, offset);
   if (bpp != 24)
   {
+    printf("[bmp_read_region_to_buf] 非24位BMP\n");
     close(bmpfd);
     return -2;
   }
   int line_bytes = ((width * 3 + 3) / 4) * 4;
   unsigned char *linebuf = malloc(line_bytes);
+  if (!linebuf)
+  {
+    printf("[bmp_read_region_to_buf] 行缓冲分配失败\n");
+    close(bmpfd);
+    return -4;
+  }
   int y;
   for (y = 0; y < h; y++)
   {
     int bmp_y = src_y + y;
     if (bmp_y < 0 || bmp_y >= height)
+    {
+      printf("[bmp_read_region_to_buf] 跳过y=%d(超出bmp高)\n", bmp_y);
       continue;
-    lseek(bmpfd, offset + (height - 1 - bmp_y) * line_bytes, SEEK_SET);
-    read(bmpfd, linebuf, line_bytes);
+    }
+    off_t seek_pos = offset + (height - 1 - bmp_y) * line_bytes;
+    lseek(bmpfd, seek_pos, SEEK_SET);
+    if (read(bmpfd, linebuf, line_bytes) != line_bytes)
+    {
+      printf("[bmp_read_region_to_buf] 读取行失败 y=%d\n", bmp_y);
+      continue;
+    }
     int x;
     for (x = 0; x < w; x++)
     {
       int bmp_x = src_x + x;
       if (bmp_x < 0 || bmp_x >= width)
+      {
+        if (y == 0)
+          printf("[bmp_read_region_to_buf] 跳过x=%d(超出bmp宽)\n", bmp_x);
         continue;
+      }
       unsigned char b = linebuf[bmp_x * 3];
       unsigned char g = linebuf[bmp_x * 3 + 1];
       unsigned char r = linebuf[bmp_x * 3 + 2];
@@ -160,6 +189,7 @@ int bmp_read_region_to_buf(const char *bmp_path, int src_x, int src_y, int w, in
   }
   free(linebuf);
   close(bmpfd);
+  printf("[bmp_read_region_to_buf] 区域读取完成\n");
   return 0;
 }
 
@@ -185,31 +215,50 @@ int bmp_compose_show(const char *header_bmp, const char *nav_bmp, const char *co
   int lcd_width = 800, lcd_height = 480;
   int *canvas = malloc(lcd_width * lcd_height * 4);
   if (!canvas)
+  {
+    printf("[bmp_compose_show] 画布分配失败\n");
     return -10;
+  }
   memset(canvas, 0xFF, lcd_width * lcd_height * 4); // 白底
-  // header: x0=0,y0=0,w=800,h=80
-  bmp_read_region_to_buf(header_bmp, 0, 0, 800, 80, canvas, lcd_width, 0, 0);
-  // nav: x0=0,y0=80,w=100,h=300
-  bmp_read_region_to_buf(nav_bmp, 0, 80, 100, 300, canvas, lcd_width, 0, 80);
-  // content: x0=100,y0=80,w=700,h=400
-  bmp_read_region_to_buf(content_bmp, 100, 80, 700, 400, canvas, lcd_width, 100, 80);
+
+  int ret;
+  printf("[bmp_compose_show] header: %s\n", header_bmp);
+  ret = bmp_read_region_to_buf(header_bmp, 0, 0, 800, 80, canvas, lcd_width, 0, 0);
+  if (ret != 0)
+    printf("[bmp_compose_show] header区域读取失败，ret=%d\n", ret);
+
+  printf("[bmp_compose_show] nav: %s\n", nav_bmp);
+  ret = bmp_read_region_to_buf(nav_bmp, 0, 80, 100, 300, canvas, lcd_width, 0, 80);
+  if (ret != 0)
+    printf("[bmp_compose_show] nav区域读取失败，ret=%d\n", ret);
+
+  printf("[bmp_compose_show] content: %s\n", content_bmp);
+  ret = bmp_read_region_to_buf(content_bmp, 100, 80, 700, 400, canvas, lcd_width, 100, 80);
+  if (ret != 0)
+    printf("[bmp_compose_show] content区域读取失败，ret=%d\n", ret);
+
   // 写入fb
+  printf("[bmp_compose_show] 打开帧缓冲: %s\n", fb_path);
   int lcdfd = open(fb_path, O_RDWR);
   if (lcdfd == -1)
   {
+    printf("[bmp_compose_show] 打开帧缓冲失败\n");
     free(canvas);
     return -11;
   }
   int *lcdmem = mmap(NULL, lcd_width * lcd_height * 4, PROT_READ | PROT_WRITE, MAP_SHARED, lcdfd, 0);
   if (lcdmem == MAP_FAILED)
   {
+    printf("[bmp_compose_show] 帧缓冲映射失败\n");
     close(lcdfd);
     free(canvas);
     return -12;
   }
+  printf("[bmp_compose_show] memcpy到帧缓冲\n");
   memcpy(lcdmem, canvas, lcd_width * lcd_height * 4);
   munmap(lcdmem, lcd_width * lcd_height * 4);
   close(lcdfd);
   free(canvas);
+  printf("[bmp_compose_show] 合成显示完成\n");
   return 0;
 }

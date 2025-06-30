@@ -8,6 +8,9 @@
     "ui_pages.h": "c",
     "sqlite3.h": "c",
     "stdio.h": "c",
-    "string.h": "c"
+    "string.h": "c",
+    "bmp.h": "c",
+    "camera.h": "c",
+    "fcntl.h": "c"
   }
 }
