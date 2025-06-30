@@ -3,10 +3,96 @@
 #include "bmp.h"
 #include "config.h"
 #include <stddef.h>
+#include <stdio.h>
 
 // 事件处理函数声明
-void on_login() { /* TODO: 登录事件处理 */ }
-void on_register() { /* TODO: 注册事件处理 */ }
+#include "sqlite3.h"
+#include <string.h>
+static sqlite3 *g_db = NULL;
+
+// 登录事件处理
+void on_login()
+{
+  char username[32], password[32];
+  printf("请输入用户名: ");
+  scanf("%31s", username);
+  printf("请输入密码: ");
+  scanf("%31s", password);
+
+  // 查询用户
+  const char *sql = "select * from usertable where username=? and password=?;";
+  sqlite3_stmt *stmt = NULL;
+  int ret = sqlite3_prepare_v2(g_db, sql, -1, &stmt, NULL);
+  if (ret != SQLITE_OK)
+  {
+    printf("数据库查询失败！\n");
+    return;
+  }
+  sqlite3_bind_text(stmt, 1, username, -1, SQLITE_TRANSIENT);
+  sqlite3_bind_text(stmt, 2, password, -1, SQLITE_TRANSIENT);
+  ret = sqlite3_step(stmt);
+  if (ret == SQLITE_ROW)
+  {
+    printf("登录成功！\n");
+    ui_router_push("welcome", NULL);
+  }
+  else
+  {
+    printf("用户名或密码错误！\n");
+  }
+  sqlite3_finalize(stmt);
+}
+
+// 注册事件处理
+void on_register()
+{
+  char username[32], password[32];
+  printf("请输入新用户名: ");
+  scanf("%31s", username);
+  printf("请输入新密码: ");
+  scanf("%31s", password);
+
+  // 检查用户名是否已存在
+  const char *check_sql = "select * from usertable where username=?;";
+  sqlite3_stmt *stmt = NULL;
+  int ret = sqlite3_prepare_v2(g_db, check_sql, -1, &stmt, NULL);
+  if (ret != SQLITE_OK)
+  {
+    printf("数据库查询失败！\n");
+    return;
+  }
+  sqlite3_bind_text(stmt, 1, username, -1, SQLITE_TRANSIENT);
+  ret = sqlite3_step(stmt);
+  if (ret == SQLITE_ROW)
+  {
+    printf("用户名已存在！\n");
+    sqlite3_finalize(stmt);
+    return;
+  }
+  sqlite3_finalize(stmt);
+
+  // 插入新用户
+  const char *insert_sql = "insert into usertable (username, password) values (?, ?);";
+  ret = sqlite3_prepare_v2(g_db, insert_sql, -1, &stmt, NULL);
+  if (ret != SQLITE_OK)
+  {
+    printf("数据库插入失败！\n");
+    return;
+  }
+  sqlite3_bind_text(stmt, 1, username, -1, SQLITE_TRANSIENT);
+  sqlite3_bind_text(stmt, 2, password, -1, SQLITE_TRANSIENT);
+  ret = sqlite3_step(stmt);
+  if (ret == SQLITE_DONE)
+  {
+    printf("注册成功！\n");
+    ui_router_push("login", NULL);
+  }
+  else
+  {
+    printf("注册失败！\n");
+  }
+  sqlite3_finalize(stmt);
+}
 void on_welcome() { /* TODO: 欢迎版事件处理 */ }
 void on_avatar() { /* TODO: 头像事件处理 */ }
 
@@ -50,5 +136,24 @@ void ui_pages_init(void)
   static bmp_show_param_t welcome_param = {BMP_WELCOME_PATH, 0, 0, LCD_WIDTH, LCD_HEIGHT, LCD_FB_PATH};
   ui_router_register("login", bmp_show_callback, &login_param, login_regions, login_region_count);
   ui_router_register("welcome", bmp_show_callback, &welcome_param, welcome_regions, welcome_region_count);
+
+  // 打开数据库并创建用户表
+  int ret = sqlite3_open("./new.db", &g_db);
+  if (ret != SQLITE_OK)
+  {
+    printf("无法打开数据库！\n");
+    g_db = NULL;
+  }
+  else
+  {
+    char *errmsg = NULL;
+    ret = sqlite3_exec(g_db, "create table if not exists usertable (username text primary key, password text);", NULL, NULL, &errmsg);
+    if (ret != SQLITE_OK)
+    {
+      printf("创建用户表失败: %s\n", errmsg);
+      sqlite3_free(errmsg);
+    }
+  }
+
   ui_router_push("login", NULL);
 }

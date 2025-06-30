@@ -13,6 +13,29 @@ static unsigned int bgr_to_argb(unsigned char b, unsigned char g, unsigned char 
   return (0xFF << 24) | (r << 16) | (g << 8) | b;
 }
 
+/**
+ * @brief 在LCD帧缓冲区上显示24位BMP图片。
+ *
+ * 此函数从指定的文件路径读取24位BMP图片，并将其显示在LCD帧缓冲区的指定(lcd_x, lcd_y)位置。
+ * 帧缓冲区被映射到内存中，BMP图片逐像素复制，并通过`bgr_to_argb`函数将每个像素从BGR格式转换为ARGB格式。
+ *
+ * @param bmp_path   BMP图片文件路径（必须为24位BMP）。
+ * @param lcd_x      图片左上角在LCD上的X坐标。
+ * @param lcd_y      图片左上角在LCD上的Y坐标。
+ * @param lcd_width  LCD帧缓冲区的宽度（像素）。
+ * @param lcd_height LCD帧缓冲区的高度（像素）。
+ * @param fb_path    帧缓冲设备文件路径（如"/dev/fb0"）。
+ *
+ * @return 成功返回0，
+ *         -1 无法打开BMP文件，
+ *         -2 BMP不是24位格式，
+ *         -3 无法打开帧缓冲设备，
+ *         -4 帧缓冲区内存映射失败。
+ *
+ * @note 假设帧缓冲区为32位每像素（ARGB）。
+ * @note BMP图片不会缩放，按原始大小绘制。
+ * @note 本函数未对图片尺寸与LCD尺寸做越界检查。
+ */
 int bmp_show(const char *bmp_path, int lcd_x, int lcd_y, int lcd_width, int lcd_height, const char *fb_path)
 {
   int bmpfd, lcdfd;

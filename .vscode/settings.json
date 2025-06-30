@@ -5,6 +5,9 @@
     "*.md": "markdown",
     "*.css": "tailwindcss",
     "touch.h": "c",
-    "ui_pages.h": "c"
+    "ui_pages.h": "c",
+    "sqlite3.h": "c",
+    "stdio.h": "c",
+    "string.h": "c"
   }
 }
