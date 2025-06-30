@@ -52,9 +52,9 @@ void event_loop(touch_device_t *ts)
 	}
 }
 
-int main()
+// 开机动画播放函数
+void play_boot_animation()
 {
-	// 开机动画
 	char bmp_path[128];
 	for (int i = 0; i <= 26; ++i)
 	{
@@ -62,7 +62,11 @@ int main()
 		bmp_show(bmp_path, 0, 0, LCD_WIDTH, LCD_HEIGHT, LCD_FB_PATH);
 		usleep(40000); // 40ms per frame, 可根据需要调整
 	}
+}
 
+int main()
+{
+	play_boot_animation();
 	ui_pages_init();
 	touch_device_t *ts = open_touch();
 	if (!ts)
