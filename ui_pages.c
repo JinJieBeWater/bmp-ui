@@ -4,8 +4,6 @@
 #include "config.h"
 #include <stddef.h>
 #include <stdio.h>
-
-// 事件处理函数声明
 #include "sqlite3.h"
 #include <string.h>
 #include "camera.h"
@@ -13,6 +11,8 @@
 #include <sys/ioctl.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <signal.h>
+#include <pthread.h>
 
 static sqlite3 *g_db = NULL;
 
@@ -108,35 +108,14 @@ static touch_region_t login_regions[] = {
 static int login_region_count = sizeof(login_regions) / sizeof(login_regions[0]);
 
 // dashboard
-
 // 摄像头全局指针
 static camera_t *g_camera = NULL;
 static int g_camera_running = 0;
+static pthread_t g_camera_thread;
 
-void on_open_camera()
+// 线程采集函数
+static void *camera_capture_thread(void *arg)
 {
-  if (g_camera_running)
-  {
-    printf("摄像头采集已在运行\n");
-    return;
-  }
-  g_camera = camera_open("/dev/video7", BMP_CAMERA_W, BMP_CAMERA_H);
-  if (!g_camera)
-  {
-    printf("摄像头打开失败！\n");
-    return;
-  }
-  if (camera_start(g_camera) == -1)
-  {
-    printf("摄像头启动失败！\n");
-    camera_close(g_camera);
-    g_camera = NULL;
-    return;
-  }
-  g_camera_running = 1;
-  printf("摄像头已打开并启动，开始采集...\n");
-
-  // 简单实现：阻塞式循环采集，直到g_camera_running为0（实际项目建议用线程/定时器）
   while (g_camera_running)
   {
     int frame_len, buf_index;
@@ -173,10 +152,43 @@ void on_open_camera()
     munmap(lcdmem, LCD_WIDTH * LCD_HEIGHT * 4);
     close(lcdfd);
     camera_requeue(g_camera, buf_index);
-    // 可适当延时，防止CPU占用过高
-    usleep(30000); // 约30fps
+    usleep(33000); // 约30fps
   }
-  printf("摄像头采集已停止\n");
+  printf("摄像头采集线程退出\n");
+  return NULL;
+}
+
+void on_open_camera()
+{
+  if (g_camera_running)
+  {
+    printf("摄像头采集已在运行\n");
+    return;
+  }
+  g_camera = camera_open("/dev/video7", BMP_CAMERA_W, BMP_CAMERA_H);
+  if (!g_camera)
+  {
+    printf("摄像头打开失败！\n");
+    return;
+  }
+  if (camera_start(g_camera) == -1)
+  {
+    printf("摄像头启动失败！\n");
+    camera_close(g_camera);
+    g_camera = NULL;
+    return;
+  }
+  g_camera_running = 1;
+  if (pthread_create(&g_camera_thread, NULL, camera_capture_thread, NULL) != 0)
+  {
+    printf("采集线程创建失败！\n");
+    g_camera_running = 0;
+    camera_stop(g_camera);
+    camera_close(g_camera);
+    g_camera = NULL;
+    return;
+  }
+  printf("摄像头已打开并启动，采集线程运行中...\n");
 }
 
 void on_close_camera()
@@ -187,7 +199,7 @@ void on_close_camera()
     return;
   }
   g_camera_running = 0;
-  // 等待on_open_camera循环退出
+  pthread_join(g_camera_thread, NULL); // 等待采集线程退出
   camera_stop(g_camera);
   camera_close(g_camera);
   g_camera = NULL;
