@@ -14,13 +14,14 @@ extern "C"
   {
     const char *name;
     ui_page_func_t on_show;
+    ui_page_func_t on_hide; // 新增页面卸载回调
     void *param;
     void *regions; // 指向页面的触摸区域数组
     int region_count;
   } ui_page_t;
 
   // 注册页面
-  int ui_router_register(const char *name, ui_page_func_t on_show, void *param, void *regions, int region_count);
+  int ui_router_register(const char *name, ui_page_func_t on_show, ui_page_func_t on_hide, void *param, void *regions, int region_count);
   // 跳转到页面
   int ui_router_push(const char *name, void *param);
   // 返回上一个页面

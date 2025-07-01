@@ -108,15 +108,17 @@ static touch_region_t login_regions[] = {
 static int login_region_count = sizeof(login_regions) / sizeof(login_regions[0]);
 
 // dashboard
+#include <stdatomic.h>
+
 // 摄像头全局指针
 static camera_t *g_camera = NULL;
-static int g_camera_running = 0;
+static atomic_int g_camera_running = ATOMIC_VAR_INIT(0);
 static pthread_t g_camera_thread;
 
 // 线程采集函数
 static void *camera_capture_thread(void *arg)
 {
-  while (g_camera_running)
+  while (atomic_load(&g_camera_running))
   {
     int frame_len, buf_index;
     void *frame = camera_capture(g_camera, &frame_len, &buf_index);
@@ -178,7 +180,7 @@ void on_open_camera()
     g_camera = NULL;
     return;
   }
-  g_camera_running = 1;
+  atomic_store(&g_camera_running, 1);
   if (pthread_create(&g_camera_thread, NULL, camera_capture_thread, NULL) != 0)
   {
     printf("采集线程创建失败！\n");
@@ -198,12 +200,18 @@ void on_close_camera()
     printf("摄像头未打开\n");
     return;
   }
-  g_camera_running = 0;
+  atomic_store(&g_camera_running, 0);
   pthread_join(g_camera_thread, NULL); // 等待采集线程退出
   camera_stop(g_camera);
   camera_close(g_camera);
   g_camera = NULL;
   printf("摄像头已关闭\n");
+}
+
+// dashboard页面卸载回调
+static void dashboard_hide_callback(void *param)
+{
+  on_close_camera(); // 确保关闭摄像头
 }
 
 void on_logout()
@@ -213,7 +221,7 @@ void on_logout()
 
 static touch_region_t dashboard_regions[] = {
     {"打开摄像头", 110, 360, 250, 390, on_open_camera},
-    {"关闭摄像头", 110, 360, 430, 390, on_close_camera},
+    {"关闭摄像头", 290, 360, 430, 390, on_close_camera}, // 修复x坐标重叠
     {"退出登录", 700, 20, 780, 50, on_logout}};
 static int dashboard_region_count = sizeof(dashboard_regions) / sizeof(dashboard_regions[0]);
 
@@ -247,9 +255,8 @@ void ui_pages_init(void)
 {
   ui_router_init();
   static bmp_show_param_t login_param = {BMP_LOGIN_PATH, 0, 0, LCD_WIDTH, LCD_HEIGHT, LCD_FB_PATH};
-  ui_router_register("login", bmp_show_callback, &login_param, login_regions, login_region_count);
-  // welcome页面用自定义合成布局的show回调
-  ui_router_register("dashboard", dashboard_show_callback, NULL, dashboard_regions, dashboard_region_count);
+  ui_router_register("login", bmp_show_callback, NULL, &login_param, login_regions, login_region_count);
+  ui_router_register("dashboard", dashboard_show_callback, dashboard_hide_callback, NULL, dashboard_regions, dashboard_region_count);
 
   // 打开数据库并创建用户表
   int ret = sqlite3_open("./new.db", &g_db);

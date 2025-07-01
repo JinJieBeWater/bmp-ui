@@ -19,12 +19,13 @@ void ui_router_init()
   memset(page_stack, 0, sizeof(page_stack));
 }
 
-int ui_router_register(const char *name, ui_page_func_t on_show, void *param, void *regions, int region_count)
+int ui_router_register(const char *name, ui_page_func_t on_show, ui_page_func_t on_hide, void *param, void *regions, int region_count)
 {
   if (page_count >= MAX_PAGES)
     return -1;
   page_table[page_count].name = name;
   page_table[page_count].on_show = on_show;
+  page_table[page_count].on_hide = on_hide; // 新增卸载回调
   page_table[page_count].param = param;
   page_table[page_count].regions = regions;
   page_table[page_count].region_count = region_count;
@@ -60,6 +61,12 @@ int ui_router_pop()
 {
   if (stack_top <= 0)
     return -1;
+
+  // 调用当前页面的on_hide回调
+  const ui_page_t *current = page_stack[stack_top];
+  if (current && current->on_hide)
+    current->on_hide(current->param);
+
   stack_top--;
   const ui_page_t *page = page_stack[stack_top];
   if (page && page->on_show)

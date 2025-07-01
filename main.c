@@ -25,7 +25,6 @@ touch_device_t *open_touch()
 	return ts;
 }
 
-// 通用事件循环，根据当前页面的触摸区域判断
 /**
  * @brief 事件循环，持续检测触摸屏幕的输入并分发事件。
  *
