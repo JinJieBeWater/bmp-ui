@@ -11,6 +11,7 @@
     "string.h": "c",
     "bmp.h": "c",
     "camera.h": "c",
-    "fcntl.h": "c"
+    "fcntl.h": "c",
+    "atomic": "c"
   }
 }

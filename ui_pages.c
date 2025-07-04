@@ -4,6 +4,7 @@
 #include "config.h"
 #include <stddef.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include "sqlite3.h"
 #include <string.h>
 #include "camera.h"
@@ -13,6 +14,9 @@
 #include <fcntl.h>
 #include <signal.h>
 #include <pthread.h>
+#include <arpa/inet.h>
+#include <sys/socket.h>
+#include <time.h>
 
 static sqlite3 *g_db = NULL;
 
@@ -208,22 +212,122 @@ void on_close_camera()
   printf("摄像头已关闭\n");
 }
 
-// dashboard页面卸载回调
-static void dashboard_hide_callback(void *param)
-{
-  on_close_camera(); // 确保关闭摄像头
-}
-
 void on_logout()
 {
   printf("退出登录事件触发\n");
 }
 
+static atomic_int g_temp_humidity_running = ATOMIC_VAR_INIT(0);
+static pthread_t g_temp_humidity_thread;
+
+// 温湿度采集线程
+static void *temperature_humidity_thread(void *arg)
+{
+  // 在这里修改IP和端口
+  const char *server_ip = "192.168.17.85";
+  int server_port = 6666;
+
+  int sockfd = socket(AF_INET, SOCK_STREAM, 0);
+  if (sockfd < 0)
+  {
+    perror("socket creation failed");
+    return NULL;
+  }
+
+  struct sockaddr_in server_addr;
+  memset(&server_addr, 0, sizeof(server_addr));
+  server_addr.sin_family = AF_INET;
+  server_addr.sin_port = htons(server_port);
+  if (inet_pton(AF_INET, server_ip, &server_addr.sin_addr) <= 0)
+  {
+    perror("invalid address");
+    close(sockfd);
+    return NULL;
+  }
+
+  if (connect(sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0)
+
+  {
+    perror("connection failed");
+    close(sockfd);
+    return NULL;
+  }
+
+  printf("成功连接到温湿度服务器 %s:%d\n", server_ip, server_port);
+  srand(time(NULL));
+
+  while (atomic_load(&g_temp_humidity_running))
+  {
+    // 生成随机温湿度数据
+    float temperature = 20.0 + (rand() / (float)RAND_MAX) * 10.0; // 20.0 - 30.0
+    float humidity = 50.0 + (rand() / (float)RAND_MAX) * 20.0;    // 50.0 - 70.0
+
+    char buffer[128];
+    snprintf(buffer, sizeof(buffer), "{\"temperature\":%.1f,\"humidity\":%.1f}", temperature, humidity);
+
+    if (send(sockfd, buffer, strlen(buffer), 0) < 0)
+    {
+      perror("send failed");
+      break;
+    }
+    printf("已发送数据: %s\n", buffer);
+
+    // 在这里修改发送间隔（秒）
+    sleep(5);
+  }
+
+  close(sockfd);
+  printf("温湿度采集线程退出\n");
+  return NULL;
+}
+
+void on_start_capture_temperature_humidity()
+{
+  if (atomic_load(&g_temp_humidity_running))
+  {
+    printf("温湿度采集已在运行\n");
+    return;
+  }
+
+  atomic_store(&g_temp_humidity_running, 1);
+  if (pthread_create(&g_temp_humidity_thread, NULL, temperature_humidity_thread, NULL) != 0)
+  {
+    perror("温湿度采集线程创建失败");
+    atomic_store(&g_temp_humidity_running, 0);
+  }
+  else
+  {
+    printf("温湿度采集线程已启动\n");
+  }
+}
+
+void on_stop_capture_temperature_humidity()
+{
+  if (!atomic_load(&g_temp_humidity_running))
+  {
+    printf("温湿度采集未运行\n");
+    return;
+  }
+  atomic_store(&g_temp_humidity_running, 0);
+  pthread_join(g_temp_humidity_thread, NULL); // 等待线程退出
+  printf("温湿度采集已停止\n");
+}
+
 static touch_region_t dashboard_regions[] = {
     {"打开摄像头", 110, 360, 250, 390, on_open_camera},
-    {"关闭摄像头", 290, 360, 430, 390, on_close_camera}, // 修复x坐标重叠
-    {"退出登录", 700, 20, 780, 50, on_logout}};
+    {"关闭摄像头", 290, 360, 430, 390, on_close_camera},
+    {"退出登录", 700, 20, 780, 50, on_logout},
+    {"开始采集温湿度", 570, 100, 670, 130, on_start_capture_temperature_humidity},
+    {"停止采集温湿度", 690, 100, 790, 130, on_stop_capture_temperature_humidity}};
+
 static int dashboard_region_count = sizeof(dashboard_regions) / sizeof(dashboard_regions[0]);
+
+// dashboard页面卸载回调
+static void dashboard_hide_callback(void *param)
+{
+  on_close_camera();                      // 确保关闭摄像头
+  on_stop_capture_temperature_humidity(); // 确保停止采集温湿度
+}
 
 // bmp_show参数结构体
 typedef struct
