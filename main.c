@@ -5,7 +5,7 @@
 #include "bmp.h"
 #include "config.h"
 #include "ui_router.h"
-#include "ui_pages.h"
+#include "page_manager.h"
 
 /**
  * @brief 打开触摸设备并返回设备句柄指针。
@@ -101,7 +101,7 @@ void play_boot_animation()
 int main()
 {
 	play_boot_animation();
-	ui_pages_init();
+	page_manager_init();
 	touch_device_t *ts = open_touch();
 	if (!ts)
 		return -1;

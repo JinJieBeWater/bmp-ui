@@ -1,6 +1,8 @@
 #ifndef UI_ROUTER_H
 #define UI_ROUTER_H
 
+#include "common_ui.h"
+
 #ifdef __cplusplus
 extern "C"
 {

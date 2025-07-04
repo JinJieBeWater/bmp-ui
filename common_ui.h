@@ -1,5 +1,5 @@
-#ifndef UI_PAGES_H
-#define UI_PAGES_H
+#ifndef COMMON_UI_H
+#define COMMON_UI_H
 
 // 通用事件区域结构体
 typedef struct
@@ -9,6 +9,4 @@ typedef struct
   void (*handler)(void);
 } touch_region_t;
 
-void ui_pages_init(void);
-
-#endif // UI_PAGES_H
+#endif // COMMON_UI_H
