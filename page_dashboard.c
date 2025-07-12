@@ -193,7 +193,7 @@ void on_start_capture_temperature_humidity()
   }
 
   // 在这里修改IP和端口
-  const char *server_ip = "192.168.17.85";
+  const char *server_ip = "192.168.17.50";
   int server_port = 6666;
 
   int sockfd = socket(AF_INET, SOCK_STREAM, 0);
