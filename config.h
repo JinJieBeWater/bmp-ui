@@ -9,4 +9,8 @@
 #define BMP_LOGIN_PATH "./resources/login.bmp"
 #define BMP_WELCOME_PATH "./resources/welcome.bmp" // 如有欢迎页图片
 
+#define TEMP_HUMIDITY_SERVER_IP "192.168.14.49"
+#define TEMP_HUMIDITY_SERVER_PORT 6666
+
+
 #endif // CONFIG_H

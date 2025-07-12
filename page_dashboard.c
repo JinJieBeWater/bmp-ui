@@ -124,15 +124,10 @@ static pthread_t g_temp_humidity_thread;
 // 温湿度采集线程
 static void *temperature_humidity_thread(void *arg)
 {
-  // 在这里修改IP和端口
-  const char *server_ip = "192.168.17.85";
-  int server_port = 6666;
-
   int sockfd = socket(AF_INET, SOCK_STREAM, 0);
   if (sockfd < 0)
   {
     perror("socket creation failed");
-    // 关闭线程
     atomic_store(&g_temp_humidity_running, 0);
     pthread_exit(NULL);
   }
@@ -140,24 +135,24 @@ static void *temperature_humidity_thread(void *arg)
   struct sockaddr_in server_addr;
   memset(&server_addr, 0, sizeof(server_addr));
   server_addr.sin_family = AF_INET;
-  server_addr.sin_port = htons(server_port);
-  if (inet_pton(AF_INET, server_ip, &server_addr.sin_addr) <= 0)
+  server_addr.sin_port = htons(TEMP_HUMIDITY_SERVER_PORT);
+  if (inet_pton(AF_INET, TEMP_HUMIDITY_SERVER_IP, &server_addr.sin_addr) <= 0)
   {
     perror("invalid address");
     close(sockfd);
-    return NULL;
+    atomic_store(&g_temp_humidity_running, 0);
+    pthread_exit(NULL);
   }
 
   if (connect(sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0)
-
   {
     perror("connection failed");
     close(sockfd);
-    return NULL;
+    atomic_store(&g_temp_humidity_running, 0);
+    pthread_exit(NULL);
   }
 
-  printf("成功连接到温湿度服务器 %s:%d\n", server_ip, server_port);
-  srand(time(NULL));
+  printf("成功连接到温湿度服务器 %s:%d\n", TEMP_HUMIDITY_SERVER_IP, TEMP_HUMIDITY_SERVER_PORT);
 
   while (atomic_load(&g_temp_humidity_running))
   {
@@ -166,20 +161,22 @@ static void *temperature_humidity_thread(void *arg)
     float humidity = 50.0 + (rand() / (float)RAND_MAX) * 20.0;    // 50.0 - 70.0
 
     char buffer[128];
-    snprintf(buffer, sizeof(buffer), "{\"temperature\":%.1f,\"humidity\":%.1f}", temperature, humidity);
+    snprintf(buffer, sizeof(buffer), "T:%.1f;H:%.1f", temperature, humidity);
 
     if (send(sockfd, buffer, strlen(buffer), 0) < 0)
     {
       perror("send failed");
+      atomic_store(&g_temp_humidity_running, 0); // 服务端断开连接，设置标志位停止线程
       break;
     }
     printf("已发送数据: %s\n", buffer);
 
     // 在这里修改发送间隔（秒）
-    sleep(5);
+    sleep(1); // 修改发送间隔为1秒
   }
 
   close(sockfd);
+  g_temp_humidity_thread = (pthread_t)NULL; // 清理线程ID
   printf("温湿度采集线程退出\n");
   return NULL;
 }
@@ -192,43 +189,18 @@ void on_start_capture_temperature_humidity()
     return;
   }
 
-  // 在这里修改IP和端口
-  const char *server_ip = "192.168.17.50";
-  int server_port = 6666;
-
-  int sockfd = socket(AF_INET, SOCK_STREAM, 0);
-  if (sockfd < 0)
-  {
-    perror("socket creation failed");
-    return;
+  // 如果之前的线程已退出但未被join，则先join它以清理资源
+  if (g_temp_humidity_thread != (pthread_t)NULL) {
+      pthread_join(g_temp_humidity_thread, NULL);
+      g_temp_humidity_thread = (pthread_t)NULL; // 确保在join后设置为NULL
   }
-
-  struct sockaddr_in server_addr;
-  memset(&server_addr, 0, sizeof(server_addr));
-  server_addr.sin_family = AF_INET;
-  server_addr.sin_port = htons(server_port);
-  if (inet_pton(AF_INET, server_ip, &server_addr.sin_addr) <= 0)
-  {
-    perror("invalid address");
-    close(sockfd);
-    return;
-  }
-
-  if (connect(sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0)
-  {
-    perror("connection failed");
-    close(sockfd);
-    return;
-  }
-
-  printf("成功连接到温湿度服务器 %s:%d\n", server_ip, server_port);
 
   atomic_store(&g_temp_humidity_running, 1);
-  if (pthread_create(&g_temp_humidity_thread, NULL, temperature_humidity_thread, &sockfd) != 0)
+  if (pthread_create(&g_temp_humidity_thread, NULL, temperature_humidity_thread, NULL) != 0)
   {
     perror("温湿度采集线程创建失败");
     atomic_store(&g_temp_humidity_running, 0);
-    close(sockfd); // 线程创建失败，关闭socket
+    g_temp_humidity_thread = (pthread_t)NULL; // 线程创建失败时也设置为NULL
   }
   else
   {
@@ -245,6 +217,7 @@ void on_stop_capture_temperature_humidity()
   }
   atomic_store(&g_temp_humidity_running, 0);
   pthread_join(g_temp_humidity_thread, NULL); // 等待线程退出
+  g_temp_humidity_thread = (pthread_t)NULL; // 清理线程ID
   printf("温湿度采集已停止\n");
 }
 
